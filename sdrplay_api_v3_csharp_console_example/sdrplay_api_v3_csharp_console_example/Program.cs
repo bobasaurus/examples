@@ -9,172 +9,205 @@ using SDRplayAPIv3;
 
 namespace sdrplay_api_v3_csharp_console_example
 {
-	class Program
+	unsafe class Program
 	{
+		//public unsafe delegate void sdrplay_api_StreamCallback_t(short* xi, short* xq, ref sdrplay_api_StreamCbParamsT Params, uint numSamples, uint reset, IntPtr cbContext);
+		private static void StreamACallback(short* xi, short* xq, ref SDRplayAPI_Callback.sdrplay_api_StreamCbParamsT Params, uint numSamples, uint reset, IntPtr cbContext)
+		{
+			if (reset != 0) Console.WriteLine("sdrplay_api_StreamACallback: numSamples={0:d}\n", numSamples);
+
+			// Process stream callback data here
+			return;
+		}
+
+		private static void EventCallback(SDRplayAPI_Callback.sdrplay_api_EventT eventId, SDRplayAPI_Tuner.sdrplay_api_TunerSelectT tuner, ref SDRplayAPI_Callback.sdrplay_api_EventParamsT Params, IntPtr cbContext)
+		{
+
+		}
+
 		//todo: un-static everything in production
 		private static SDRplayAPI.sdrplay_api_DeviceT chosenDevice;
+
+		private static string CStrNullTermToString(char[] cStrNullTerm)
+		{
+			return (new string(cStrNullTerm)).TrimEnd((char)0);
+		}
 
 		static void Main(string[] args)
 		{
 			Console.WriteLine("Allen SDRplay RSPdx/RSP2 API V3 Test");
 
-			SDRplayAPI.sdrplay_api_ErrT err;
-
-			if ((err = SDRplayAPI.sdrplay_api_Open()) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+			try
 			{
-				Console.WriteLine("sdrplay_api_Open failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-			}
-			else
+
+				SDRplayAPI.sdrplay_api_ErrT err;
+
+				if ((err = SDRplayAPI.sdrplay_api_Open()) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+				{
+					Console.WriteLine("sdrplay_api_Open failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+				}
+				else
+				{
+					Console.WriteLine("API opened successfully");
+
+					// Enable debug logging output
+					if ((err = SDRplayAPI.sdrplay_api_DebugEnable(IntPtr.Zero, 1)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						Console.WriteLine("sdrplay_api_DebugEnable failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					Console.WriteLine("debug messages enabled");
+
+					// Check API versions match
+					float ver;
+					if ((err = SDRplayAPI.sdrplay_api_ApiVersion(out ver)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						Console.WriteLine("sdrplay_api_ApiVersion failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					if (ver != SDRplayAPI.SDRPLAY_API_VERSION)
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception(string.Format("API version don't match (expected={0:0.00} dll={0:0.00})", SDRplayAPI.SDRPLAY_API_VERSION, ver));
+					}
+					Console.WriteLine("API version: {0:0.000}", ver);
+
+					// Lock API while device selection is performed
+					SDRplayAPI.sdrplay_api_LockDeviceApi();
+
+					// Fetch list of available devices
+
+					SDRplayAPI.sdrplay_api_DeviceT[] devs = new SDRplayAPI.sdrplay_api_DeviceT[6];
+					if ((err = SDRplayAPI.sdrplay_api_GetDevices(devs, out uint ndev, 6)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						SDRplayAPI.sdrplay_api_UnlockDeviceApi();
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("sdrplay_api_GetDevices failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					Console.WriteLine("num devs: {0:d}", ndev);
+
+
+					chosenDevice = devs[0];//just use the first available device
+					string serialNumber = CStrNullTermToString(chosenDevice.SerNo);
+					Console.WriteLine("serial number: {0}", serialNumber);
+
+					if ((chosenDevice.hwVer != SDRplayAPI.SDRPLAY_RSP2_ID) && (chosenDevice.hwVer != SDRplayAPI.SDRPLAY_RSPdx_ID))
+					{
+						SDRplayAPI.sdrplay_api_UnlockDeviceApi();
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception(string.Format("Unsupported RSP device: %02X", chosenDevice.hwVer));
+					}
+
+					// Select chosen device
+					if ((err = SDRplayAPI.sdrplay_api_SelectDevice(ref chosenDevice)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						SDRplayAPI.sdrplay_api_UnlockDeviceApi();
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("sdrplay_api_SelectDevice failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					// Unlock API now that device is selected
+					SDRplayAPI.sdrplay_api_UnlockDeviceApi();
+
+					// Retrieve device parameters so they can be changed if wanted
+					IntPtr deviceParamsPtr = IntPtr.Zero;
+					if ((err = SDRplayAPI.sdrplay_api_GetDeviceParams(chosenDevice.dev, out deviceParamsPtr)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("sdrplay_api_GetDeviceParams failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					// Check for NULL pointers before changing settings
+					if (deviceParamsPtr == IntPtr.Zero)
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("sdrplay_api_GetDeviceParams returned NULL deviceParams pointer");
+					}
+					SDRplayAPI.sdrplay_api_DeviceParamsT deviceParams = (SDRplayAPI.sdrplay_api_DeviceParamsT)Marshal.PtrToStructure(deviceParamsPtr, typeof(SDRplayAPI.sdrplay_api_DeviceParamsT));
+
+
+
+
+					// Configure dev parameters
+					if (deviceParams.devParams != IntPtr.Zero)
+					{
+						SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams = (SDRplayAPI_Dev.sdrplay_api_DevParamsT)Marshal.PtrToStructure(deviceParams.devParams, typeof(SDRplayAPI_Dev.sdrplay_api_DevParamsT));
+						devParams.fsFreq.fsHz = 2000000.0;
+						devParams.rspDxParams.antennaSel = SDRplayAPI_RSPdx.sdrplay_api_RspDx_AntennaSelectT.sdrplay_api_RspDx_ANTENNA_A;
+					}
+					else
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("NULL dev params structure");
+					}
+					if (deviceParams.rxChannelA != IntPtr.Zero)
+					{
+						SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT rxParamsA = (SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT)Marshal.PtrToStructure(deviceParams.rxChannelA, typeof(SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT));
+
+						rxParamsA.tunerParams.rfFreq.rfHz = 402000000.0;
+						rxParamsA.tunerParams.bwType = SDRplayAPI_Tuner.sdrplay_api_Bw_MHzT.sdrplay_api_BW_1_536;
+						rxParamsA.tunerParams.ifType = SDRplayAPI_Tuner.sdrplay_api_If_kHzT.sdrplay_api_IF_Zero;
+						rxParamsA.tunerParams.gain.gRdB = 40;
+						rxParamsA.tunerParams.gain.LNAstate = 5;
+						rxParamsA.ctrlParams.agc.enable = SDRplayAPI_Control.sdrplay_api_AgcControlT.sdrplay_api_AGC_DISABLE;
+					}
+					else
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("NULL rx channel A structure");
+					}
+
+					// Assign callback functions to be passed toSDRplayAPI.sdrplay_api_Init()
+					SDRplayAPI_Callback.sdrplay_api_CallbackFnsT cbFns = new SDRplayAPI_Callback.sdrplay_api_CallbackFnsT();
+					cbFns.StreamACbFn = StreamACallback;
+					cbFns.EventCbFn = EventCallback;
+
+					// Now we're ready to start by calling the initialisation function
+					// This will configure the device and start streaming
+					if ((err = SDRplayAPI.sdrplay_api_Init(chosenDevice.dev, ref cbFns, IntPtr.Zero)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						Console.WriteLine("sdrplay_api_Init failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+
+						IntPtr lastErrorPtr = SDRplayAPI.sdrplay_api_GetLastError(IntPtr.Zero);
+						if (lastErrorPtr != IntPtr.Zero)
+						{
+							SDRplayAPI.sdrplay_api_ErrorInfoT errInfo = (SDRplayAPI.sdrplay_api_ErrorInfoT)Marshal.PtrToStructure(lastErrorPtr, typeof(SDRplayAPI.sdrplay_api_ErrorInfoT));
+							Console.WriteLine("Error in {0}: {1}(): line {2:d}: {3}",
+								CStrNullTermToString(errInfo.file),
+								CStrNullTermToString(errInfo.function),
+								errInfo.line,
+								CStrNullTermToString(errInfo.message));
+						}
+
+						SDRplayAPI.sdrplay_api_Close();
+						return;
+					}
+
+					System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+					sw.Start();
+					while (sw.Elapsed.TotalSeconds < 2)
+					{
+						Console.WriteLine("Waiting while receiving data...");
+						System.Threading.Thread.Sleep(500);
+					}
+					sw.Stop();
+
+					if ((err = SDRplayAPI.sdrplay_api_Uninit(chosenDevice.dev)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						SDRplayAPI.sdrplay_api_Close();
+						throw new Exception("sdrplay_api_Uninit failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+					// Release device (make it available to other applications)
+					SDRplayAPI.sdrplay_api_ReleaseDevice(ref chosenDevice);
+
+					if ((err = SDRplayAPI.sdrplay_api_Close()) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					{
+						throw new Exception("Error closing sdrplay api: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					}
+				}
+
+			}//end of try
+			catch (Exception ex)
 			{
-				Console.WriteLine("API opened successfully");
-
-				// Enable debug logging output
-				if ((err = SDRplayAPI.sdrplay_api_DebugEnable(IntPtr.Zero, 1)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					Console.WriteLine("sdrplay_api_DebugEnable failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				}
-				Console.WriteLine("debug messages enabled");
-
-				// Check API versions match
-				float ver;
-				if ((err = SDRplayAPI.sdrplay_api_ApiVersion(out ver)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					Console.WriteLine("sdrplay_api_ApiVersion failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				}
-				if (ver != SDRplayAPI.SDRPLAY_API_VERSION)
-				{
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception(string.Format("API version don't match (expected={0:0.00} dll={0:0.00})", SDRplayAPI.SDRPLAY_API_VERSION, ver));
-				}
-				Console.WriteLine("API version: {0:0.000}", ver);
-
-				// Lock API while device selection is performed
-				SDRplayAPI.sdrplay_api_LockDeviceApi();
-
-				// Fetch list of available devices
-
-				SDRplayAPI.sdrplay_api_DeviceT[] devs = new SDRplayAPI.sdrplay_api_DeviceT[6];
-				if ((err = SDRplayAPI.sdrplay_api_GetDevices(devs, out uint ndev, 6)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					SDRplayAPI.sdrplay_api_UnlockDeviceApi();
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception("sdrplay_api_GetDevices failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				}
-				Console.WriteLine("num devs: {0:d}", ndev);
-
-
-				chosenDevice = devs[0];//just use the first available device
-				string serialNumber = (new string(chosenDevice.SerNo)).TrimEnd((char)0);
-				Console.WriteLine("serial number: {0}", serialNumber);
-
-				if ((chosenDevice.hwVer != SDRplayAPI.SDRPLAY_RSP2_ID) && (chosenDevice.hwVer != SDRplayAPI.SDRPLAY_RSPdx_ID))
-				{
-					SDRplayAPI.sdrplay_api_UnlockDeviceApi();
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception(string.Format("Unsupported RSP device: %02X", chosenDevice.hwVer));
-				}
-
-				// Select chosen device
-				if ((err = SDRplayAPI.sdrplay_api_SelectDevice(ref chosenDevice)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					SDRplayAPI.sdrplay_api_UnlockDeviceApi();
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception("sdrplay_api_SelectDevice failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				}
-				// Unlock API now that device is selected
-				SDRplayAPI.sdrplay_api_UnlockDeviceApi();
-
-				// Retrieve device parameters so they can be changed if wanted
-				IntPtr deviceParams = IntPtr.Zero;
-				if ((err = SDRplayAPI.sdrplay_api_GetDeviceParams(chosenDevice.dev, out deviceParams)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception("sdrplay_api_GetDeviceParams failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				}
-				// Check for NULL pointers before changing settings
-				if (deviceParams == IntPtr.Zero)
-				{
-					SDRplayAPI.sdrplay_api_Close();
-					throw new Exception("sdrplay_api_GetDeviceParams returned NULL deviceParams pointer");
-				}
-				SDRplayAPI.sdrplay_api_DeviceParamsT myData2 = (SDRplayAPI.sdrplay_api_DeviceParamsT)Marshal.PtrToStructure(deviceParams, typeof(SDRplayAPI.sdrplay_api_DeviceParamsT));
-
-				SDRplayAPI_Dev.sdrplay_api_DevParamsT blah = (SDRplayAPI_Dev.sdrplay_api_DevParamsT)Marshal.PtrToStructure(myData2.devParams, typeof(SDRplayAPI_Dev.sdrplay_api_DevParamsT));
-				SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT blah2 = (SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT)Marshal.PtrToStructure(myData2.rxChannelA, typeof(SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT));
-				SDRplayAPI_Dev.sdrplay_api_DevParamsT blah3 = (SDRplayAPI_Dev.sdrplay_api_DevParamsT)Marshal.PtrToStructure(myData2.devParams, typeof(SDRplayAPI_Dev.sdrplay_api_DevParamsT));
-
-				int test = 1;
-
-				//// Configure dev parameters
-				//if (deviceParams->devParams != NULL)
-				//{
-				//	// Change from default Fs to 2MHz
-				//	deviceParams->devParams->fsFreq.fsHz = 2000000.0;
-				//	deviceParams->devParams->rspDxParams.antennaSel =SDRplayAPI.sdrplay_api_RspDx_ANTENNA_A;
-				//	//etc
-				//}
-				//else
-				//{
-				//	sdrplay_api_Close();
-				//	return 1;
-				//}
-				//if (deviceParams->rxChannelA != NULL)
-				//{
-				//	deviceParams->rxChannelA->tunerParams.rfFreq.rfHz = 402000000.0;
-				//	deviceParams->rxChannelA->tunerParams.bwType =SDRplayAPI.sdrplay_api_BW_1_536;
-				//	deviceParams->rxChannelA->tunerParams.ifType =SDRplayAPI.sdrplay_api_IF_Zero;
-				//	deviceParams->rxChannelA->tunerParams.gain.gRdB = 40;
-				//	deviceParams->rxChannelA->tunerParams.gain.LNAstate = 5;
-				//	deviceParams->rxChannelA->ctrlParams.agc.enable =SDRplayAPI.sdrplay_api_AGC_DISABLE;
-				//}
-				//else
-				//{
-				//	sdrplay_api_Close();
-				//	return 1;
-				//}
-
-				//// Assign callback functions to be passed toSDRplayAPI.sdrplay_api_Init()
-				//sdrplay_api_CallbackFnsT cbFns;
-				//cbFns.StreamACbFn = StreamACallback;
-				//cbFns.EventCbFn = EventCallback;
-
-				//// Now we're ready to start by calling the initialisation function
-				//// This will configure the device and start streaming
-				//if ((err =SDRplayAPI.sdrplay_api_Init(chosenDevice->dev, &cbFns, NULL)) !=SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				//{
-				//	Console.WriteLine("sdrplay_api_Init failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				//	sdrplay_api_ErrorInfoT* errInfo =SDRplayAPI.sdrplay_api_GetLastError(NULL);
-				//	if (errInfo != NULL) Console.WriteLine("Error in {0}: {1}(): line {2:d}: {3}", errInfo->file, errInfo->function, errInfo->line, errInfo->message);
-				//	sdrplay_api_Close();
-				//	return 1;
-				//}
-
-				//while (1) // Small loop allowing user to control gain reduction in +/-1dB steps using keyboard keys
-				//{
-				//	if (_kbhit())
-				//	{
-				//		char c = _getch();
-				//		if (c == 'q')
-				//			break;
-				//	}
-				//}
-
-				//if ((err =SDRplayAPI.sdrplay_api_Uninit(chosenDevice->dev)) !=SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				//{
-				//	Console.WriteLine("sdrplay_api_Uninit failed {0}", Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-				//	sdrplay_api_Close();
-				//	return 1;
-				//}
-				//// Release device (make it available to other applications)
-				//sdrplay_api_ReleaseDevice(chosenDevice);
-
-				if ((err = SDRplayAPI.sdrplay_api_Close()) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
-				{
-					Console.WriteLine("Error closing sdrplay api: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
-					//exception?
-				}
+				Console.WriteLine("Error: " + ex.ToString());
 			}
 
-		}
+		}//end of main
 	}
 }

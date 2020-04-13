@@ -88,11 +88,11 @@ namespace SDRplayAPIv3
         // Callback function prototypes
         //typedef void (* sdrplay_api_StreamCallback_t) (short* xi, short* xq, sdrplay_api_StreamCbParamsT*params, uint numSamples, uint reset, void* cbContext);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate void sdrplay_api_StreamCallback_t(short* xi, short* xq, IntPtr Params, uint numSamples, uint reset, IntPtr cbContext);
+        public unsafe delegate void sdrplay_api_StreamCallback_t(short* xi, short* xq, ref sdrplay_api_StreamCbParamsT Params, uint numSamples, uint reset, IntPtr cbContext);
 
         //typedef void (* sdrplay_api_EventCallback_t) (sdrplay_api_EventT eventId, sdrplay_api_TunerSelectT tuner, sdrplay_api_EventParamsT*params, void* cbContext);
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        public unsafe delegate void sdrplay_api_EventCallback_t(sdrplay_api_EventT eventId, SDRplayAPI_Tuner.sdrplay_api_TunerSelectT tuner, IntPtr Params, IntPtr cbContext);
+        public unsafe delegate void sdrplay_api_EventCallback_t(sdrplay_api_EventT eventId, SDRplayAPI_Tuner.sdrplay_api_TunerSelectT tuner, ref sdrplay_api_EventParamsT Params, IntPtr cbContext);
 
         // Callback function struct
         [StructLayout(LayoutKind.Sequential, Pack = 0)]

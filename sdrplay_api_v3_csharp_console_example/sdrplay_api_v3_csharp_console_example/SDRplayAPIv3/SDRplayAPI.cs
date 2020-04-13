@@ -195,7 +195,7 @@ namespace SDRplayAPIv3
 
         //_SDRPLAY_DLL_QUALIFIER sdrplay_api_ErrT        sdrplay_api_ReleaseDevice(sdrplay_api_DeviceT* device);
         [DllImport(DLL_FILENAME, CallingConvention = CallingConvention.Cdecl)]
-        public static extern sdrplay_api_ErrT sdrplay_api_ReleaseDevice(IntPtr device);
+        public static extern sdrplay_api_ErrT sdrplay_api_ReleaseDevice(ref sdrplay_api_DeviceT device);
 
         //_SDRPLAY_DLL_QUALIFIER const char* sdrplay_api_GetErrorString(sdrplay_api_ErrT err);
         [DllImport(DLL_FILENAME, CallingConvention = CallingConvention.Cdecl)]
