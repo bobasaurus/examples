@@ -46,6 +46,13 @@ namespace sdrplay_api_v3_csharp_console_example
 
 			try
 			{
+				//these sizes must match the C API or random memory will get overwritten causing corruption
+				if (Marshal.SizeOf(typeof(SDRplayAPI.sdrplay_api_DeviceParamsT)) != 12)
+					throw new Exception("sdrplay_api_DeviceParamsT size mismatch to C API expected size, check struct packing");
+				if (Marshal.SizeOf(typeof(SDRplayAPI_Dev.sdrplay_api_DevParamsT)) != 64)
+					throw new Exception("sdrplay_api_DevParamsT size mismatch to C API expected size, check struct packing");
+				if (Marshal.SizeOf(typeof(SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT)) != 144)
+					throw new Exception("sdrplay_api_RxChannelParamsT size mismatch to C API expected size, check struct packing");
 
 				SDRplayAPI.sdrplay_api_ErrT err;
 
@@ -136,7 +143,7 @@ namespace sdrplay_api_v3_csharp_console_example
 					{
 						//this makes a copy of the unmanaged structure allocated in the API
 						SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams = Marshal.PtrToStructure<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(deviceParams.devParams);
-						devParams.fsFreq.fsHz = 8000000.0;//doesn't seem to work, sadly
+						devParams.fsFreq.fsHz = 6000000;//doesn't seem to work, sadly
 						devParams.rspDxParams.antennaSel = SDRplayAPI_RSPdx.sdrplay_api_RspDx_AntennaSelectT.sdrplay_api_RspDx_ANTENNA_A;
 						devParams.rspDxParams.biasTEnable = 0;
 
