@@ -184,9 +184,9 @@ namespace sdrplay_api_v3_csharp_console_example
 					{
 						//this makes a copy of the unmanaged structure allocated in the API
 						SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams = Marshal.PtrToStructure<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(deviceParams.devParams);
-						devParams.fsFreq.fsHz = 6000000;//doesn't seem to work, sadly
-						devParams.rspDxParams.antennaSel = SDRplayAPI_RSPdx.sdrplay_api_RspDx_AntennaSelectT.sdrplay_api_RspDx_ANTENNA_A;
-						devParams.rspDxParams.biasTEnable = 0;
+						devParams.fsFreq.fsHz = 2000000;
+						devParams.rspDxParams.antennaSel = SDRplayAPI_RSPdx.sdrplay_api_RspDx_AntennaSelectT.sdrplay_api_RspDx_ANTENNA_B;
+						devParams.rspDxParams.biasTEnable = 1;
 
 						//to apply these changes, overwrite the unmanaged structure memory with the updated managed structure
 						Marshal.StructureToPtr<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(devParams, deviceParams.devParams, false);
@@ -242,6 +242,22 @@ namespace sdrplay_api_v3_csharp_console_example
 						SDRplayAPI.sdrplay_api_Close();
 						return;
 					}
+
+
+
+					//read the device parameters again as a test just to make sure the C# managed struct to C unmanaged struct marshalling worked, check in debug watch
+					//{
+					//	IntPtr deviceParamsPtr2 = IntPtr.Zero;
+					//	if ((err = SDRplayAPI.sdrplay_api_GetDeviceParams(chosenDevice.dev, out deviceParamsPtr2)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
+					//	{
+					//		SDRplayAPI.sdrplay_api_Close();
+					//		throw new Exception("sdrplay_api_GetDeviceParams failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
+					//	}
+					//	SDRplayAPI.sdrplay_api_DeviceParamsT deviceParams2 = Marshal.PtrToStructure<SDRplayAPI.sdrplay_api_DeviceParamsT>(deviceParamsPtr2);
+					//	SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams2 = Marshal.PtrToStructure<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(deviceParams2.devParams);
+					//	SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT rxParamsA2 = Marshal.PtrToStructure<SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT>(deviceParams2.rxChannelA);
+					//}
+
 
 
 					while (sw.Elapsed.TotalSeconds < 6)
