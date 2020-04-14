@@ -11,11 +11,18 @@ namespace sdrplay_api_v3_csharp_console_example
 {
 	unsafe class Program
 	{
+		private static System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
+		private static long totalSampleCount = 0;
 		//public unsafe delegate void sdrplay_api_StreamCallback_t(short* xi, short* xq, ref sdrplay_api_StreamCbParamsT Params, uint numSamples, uint reset, IntPtr cbContext);
 		private static void StreamACallback(short* xi, short* xq, ref SDRplayAPI_Callback.sdrplay_api_StreamCbParamsT Params, uint numSamples, uint reset, IntPtr cbContext)
 		{
-			if (reset != 0) Console.WriteLine("sdrplay_api_StreamACallback: numSamples={0:d}\n", numSamples);
+			if (reset != 0)
+			{
+				sw.Start();
+				Console.WriteLine("sdrplay_api_StreamACallback: numSamples={0:d}\n", numSamples);
+			}
 
+			totalSampleCount += numSamples;
 			// Process stream callback data here
 			return;
 		}
@@ -119,7 +126,7 @@ namespace sdrplay_api_v3_csharp_console_example
 						SDRplayAPI.sdrplay_api_Close();
 						throw new Exception("sdrplay_api_GetDeviceParams returned NULL deviceParams pointer");
 					}
-					SDRplayAPI.sdrplay_api_DeviceParamsT deviceParams = (SDRplayAPI.sdrplay_api_DeviceParamsT)Marshal.PtrToStructure(deviceParamsPtr, typeof(SDRplayAPI.sdrplay_api_DeviceParamsT));
+					SDRplayAPI.sdrplay_api_DeviceParamsT deviceParams = Marshal.PtrToStructure<SDRplayAPI.sdrplay_api_DeviceParamsT>(deviceParamsPtr);
 
 
 
@@ -127,9 +134,14 @@ namespace sdrplay_api_v3_csharp_console_example
 					// Configure dev parameters
 					if (deviceParams.devParams != IntPtr.Zero)
 					{
-						SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams = (SDRplayAPI_Dev.sdrplay_api_DevParamsT)Marshal.PtrToStructure(deviceParams.devParams, typeof(SDRplayAPI_Dev.sdrplay_api_DevParamsT));
-						devParams.fsFreq.fsHz = 2000000.0;
+						//this makes a copy of the unmanaged structure allocated in the API
+						SDRplayAPI_Dev.sdrplay_api_DevParamsT devParams = Marshal.PtrToStructure<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(deviceParams.devParams);
+						devParams.fsFreq.fsHz = 8000000.0;//doesn't seem to work, sadly
 						devParams.rspDxParams.antennaSel = SDRplayAPI_RSPdx.sdrplay_api_RspDx_AntennaSelectT.sdrplay_api_RspDx_ANTENNA_A;
+						devParams.rspDxParams.biasTEnable = 0;
+
+						//to apply these changes, overwrite the unmanaged structure memory with the updated managed structure
+						Marshal.StructureToPtr<SDRplayAPI_Dev.sdrplay_api_DevParamsT>(devParams, deviceParams.devParams, false);
 					}
 					else
 					{
@@ -138,7 +150,8 @@ namespace sdrplay_api_v3_csharp_console_example
 					}
 					if (deviceParams.rxChannelA != IntPtr.Zero)
 					{
-						SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT rxParamsA = (SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT)Marshal.PtrToStructure(deviceParams.rxChannelA, typeof(SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT));
+						//this makes a copy of the unmanaged structure allocated in the API
+						SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT rxParamsA = Marshal.PtrToStructure<SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT>(deviceParams.rxChannelA);
 
 						rxParamsA.tunerParams.rfFreq.rfHz = 402000000.0;
 						rxParamsA.tunerParams.bwType = SDRplayAPI_Tuner.sdrplay_api_Bw_MHzT.sdrplay_api_BW_1_536;
@@ -146,6 +159,9 @@ namespace sdrplay_api_v3_csharp_console_example
 						rxParamsA.tunerParams.gain.gRdB = 40;
 						rxParamsA.tunerParams.gain.LNAstate = 5;
 						rxParamsA.ctrlParams.agc.enable = SDRplayAPI_Control.sdrplay_api_AgcControlT.sdrplay_api_AGC_DISABLE;
+
+						//to apply these changes, overwrite the unmanaged structure memory with the updated managed structure
+						Marshal.StructureToPtr<SDRplayAPI_RXChannel.sdrplay_api_RxChannelParamsT>(rxParamsA, deviceParams.rxChannelA, false);
 					}
 					else
 					{
@@ -167,7 +183,7 @@ namespace sdrplay_api_v3_csharp_console_example
 						IntPtr lastErrorPtr = SDRplayAPI.sdrplay_api_GetLastError(IntPtr.Zero);
 						if (lastErrorPtr != IntPtr.Zero)
 						{
-							SDRplayAPI.sdrplay_api_ErrorInfoT errInfo = (SDRplayAPI.sdrplay_api_ErrorInfoT)Marshal.PtrToStructure(lastErrorPtr, typeof(SDRplayAPI.sdrplay_api_ErrorInfoT));
+							SDRplayAPI.sdrplay_api_ErrorInfoT errInfo = Marshal.PtrToStructure<SDRplayAPI.sdrplay_api_ErrorInfoT>(lastErrorPtr);
 							Console.WriteLine("Error in {0}: {1}(): line {2:d}: {3}",
 								CStrNullTermToString(errInfo.file),
 								CStrNullTermToString(errInfo.function),
@@ -179,20 +195,21 @@ namespace sdrplay_api_v3_csharp_console_example
 						return;
 					}
 
-					System.Diagnostics.Stopwatch sw = new System.Diagnostics.Stopwatch();
-					sw.Start();
-					while (sw.Elapsed.TotalSeconds < 2)
+					
+					while (sw.Elapsed.TotalSeconds < 6)
 					{
 						Console.WriteLine("Waiting while receiving data...");
 						System.Threading.Thread.Sleep(500);
 					}
-					sw.Stop();
 
 					if ((err = SDRplayAPI.sdrplay_api_Uninit(chosenDevice.dev)) != SDRplayAPI.sdrplay_api_ErrT.sdrplay_api_Success)
 					{
 						SDRplayAPI.sdrplay_api_Close();
 						throw new Exception("sdrplay_api_Uninit failed: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
 					}
+
+					sw.Stop();
+
 					// Release device (make it available to other applications)
 					SDRplayAPI.sdrplay_api_ReleaseDevice(ref chosenDevice);
 
@@ -200,6 +217,11 @@ namespace sdrplay_api_v3_csharp_console_example
 					{
 						throw new Exception("Error closing sdrplay api: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
 					}
+
+					
+
+					Console.WriteLine("total samples: {0:d}, total seconds: {1:0.00}, approx sps {2:0.}", totalSampleCount, sw.Elapsed.TotalSeconds, ((double)totalSampleCount)/sw.Elapsed.TotalSeconds);
+
 				}
 
 			}//end of try
