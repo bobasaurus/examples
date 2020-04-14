@@ -1,11 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using SDRplayAPIv3;
+using System;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Threading.Tasks;
-
-using SDRplayAPIv3;
 
 namespace sdrplay_api_v3_csharp_console_example
 {
@@ -19,7 +14,7 @@ namespace sdrplay_api_v3_csharp_console_example
 			if (reset != 0)
 			{
 				sw.Start();
-				Console.WriteLine("sdrplay_api_StreamACallback: numSamples={0:d}\n", numSamples);
+				Console.WriteLine("sdrplay_api_StreamACallback: numSamples={0:d}", numSamples);
 			}
 
 			totalSampleCount += numSamples;
@@ -29,7 +24,53 @@ namespace sdrplay_api_v3_csharp_console_example
 
 		private static void EventCallback(SDRplayAPI_Callback.sdrplay_api_EventT eventId, SDRplayAPI_Tuner.sdrplay_api_TunerSelectT tuner, ref SDRplayAPI_Callback.sdrplay_api_EventParamsT Params, IntPtr cbContext)
 		{
-
+			switch (eventId)
+			{
+				case SDRplayAPI_Callback.sdrplay_api_EventT.sdrplay_api_GainChange:
+					Console.WriteLine("sdrplay_api_EventCb: {0}, tuner={1} gRdB={2:d} lnaGRdB={3:d} systemGain={4:0.00}",
+						"sdrplay_api_GainChange", (tuner == SDRplayAPI_Tuner.sdrplay_api_TunerSelectT.sdrplay_api_Tuner_A) ? "sdrplay_api_Tuner_A" :
+						"sdrplay_api_Tuner_B", Params.gainParams.gRdB, Params.gainParams.lnaGRdB,
+						Params.gainParams.currGain);
+					break;
+				case SDRplayAPI_Callback.sdrplay_api_EventT.sdrplay_api_PowerOverloadChange:
+					Console.WriteLine("sdrplay_api_PowerOverloadChange: tuner={0} powerOverloadChangeType={1}",
+						(tuner == SDRplayAPI_Tuner.sdrplay_api_TunerSelectT.sdrplay_api_Tuner_A) ? "sdrplay_api_Tuner_A" : "sdrplay_api_Tuner_B",
+						(Params.powerOverloadParams.powerOverloadChangeType == SDRplayAPI_Callback.sdrplay_api_PowerOverloadCbEventIdT.sdrplay_api_Overload_Detected) 
+						? "sdrplay_api_Overload_Detected" : "sdrplay_api_Overload_Corrected");
+					// Send update message to acknowledge power overload message received
+					SDRplayAPI.sdrplay_api_Update(chosenDevice.dev, tuner, SDRplayAPI.sdrplay_api_ReasonForUpdateT.sdrplay_api_Update_Ctrl_OverloadMsgAck,
+						SDRplayAPI.sdrplay_api_ReasonForUpdateExtension1T.sdrplay_api_Update_Ext1_None);
+					break;
+				case SDRplayAPI_Callback.sdrplay_api_EventT.sdrplay_api_RspDuoModeChange:
+					Console.WriteLine("sdrplay_api_EventCb: {0}, tuner={1} modeChangeType={2}",
+						"sdrplay_api_RspDuoModeChange", (tuner == SDRplayAPI_Tuner.sdrplay_api_TunerSelectT.sdrplay_api_Tuner_A) ?
+						"sdrplay_api_Tuner_A" : "sdrplay_api_Tuner_B",
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_MasterInitialised) ?
+						"sdrplay_api_MasterInitialised" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_SlaveAttached) ?
+						"sdrplay_api_SlaveAttached" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_SlaveDetached) ?
+						"sdrplay_api_SlaveDetached" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_SlaveInitialised) ?
+						"sdrplay_api_SlaveInitialised" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_SlaveUninitialised) ?
+						"sdrplay_api_SlaveUninitialised" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_MasterDllDisappeared) ?
+						"sdrplay_api_MasterDllDisappeared" :
+						(Params.rspDuoModeParams.modeChangeType == SDRplayAPI_Callback.sdrplay_api_RspDuoModeCbEventIdT.sdrplay_api_SlaveDllDisappeared) ?
+						"sdrplay_api_SlaveDllDisappeared" : "unknown type");
+					//if (Params.rspDuoModeParams.modeChangeType == sdrplay_api_MasterInitialised)
+					//	masterInitialised = 1;
+					//if (Params.rspDuoModeParams.modeChangeType == sdrplay_api_SlaveUninitialised)
+					//	slaveUninitialised = 1;
+					break;
+				case SDRplayAPI_Callback.sdrplay_api_EventT.sdrplay_api_DeviceRemoved:
+					Console.WriteLine("sdrplay_api_EventCb: {0}", "sdrplay_api_DeviceRemoved");
+					break;
+				default:
+					Console.WriteLine("sdrplay_api_EventCb: {0}, unknown event", eventId);
+					break;
+			}
 		}
 
 		//todo: un-static everything in production
@@ -202,7 +243,7 @@ namespace sdrplay_api_v3_csharp_console_example
 						return;
 					}
 
-					
+
 					while (sw.Elapsed.TotalSeconds < 6)
 					{
 						Console.WriteLine("Waiting while receiving data...");
@@ -225,9 +266,9 @@ namespace sdrplay_api_v3_csharp_console_example
 						throw new Exception("Error closing sdrplay api: " + Marshal.PtrToStringAnsi(SDRplayAPI.sdrplay_api_GetErrorString(err)));
 					}
 
-					
 
-					Console.WriteLine("total samples: {0:d}, total seconds: {1:0.00}, approx sps {2:0.}", totalSampleCount, sw.Elapsed.TotalSeconds, ((double)totalSampleCount)/sw.Elapsed.TotalSeconds);
+
+					Console.WriteLine("total samples: {0:d}, total seconds: {1:0.00}, approx sps {2:0.}", totalSampleCount, sw.Elapsed.TotalSeconds, ((double)totalSampleCount) / sw.Elapsed.TotalSeconds);
 
 				}
 
